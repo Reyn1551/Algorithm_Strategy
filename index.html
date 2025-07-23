@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panduan Interaktif UAS Strategi Algoritma</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: A single-page, vertically-scrolling layout with a sticky top navigation is chosen for its simplicity and directness. This structure mirrors the linear study process a student might follow, presenting each topic as a distinct, comprehensive module. It avoids the cognitive load of tabs or multi-page navigation, allowing the user to focus on one concept at a time while still easily switching between topics. The core of the design is the "interactive example" within each module, transforming the static text-based examples into engaging, step-by-step visualizations that actively guide the user through the algorithm's execution, enhancing comprehension and retention. -->
+    <!-- Visualization & Content Choices: 
+        - TSP: Report info (cost matrix, B&B steps) -> Goal (demonstrate reduction, branching, pruning) -> Viz (HTML tables for matrices, HTML/CSS divs for state-tree) -> Interaction ("Next Step" button to animate matrix changes, tree growth, and pruning) -> Justification (A step-by-step visual build-up is more intuitive than a static explanation for understanding the dynamic B&B process) -> Library (Vanilla JS, HTML).
+        - UCS: Report info (graph, edge costs, UCS steps) -> Goal (show priority-queue-based node expansion) -> Viz (HTML/CSS graph, HTML tables for queue/costs) -> Interaction ("Next Step" button to highlight current node, update queue/cost tables, and trace the final path) -> Justification (Visually tracking the state of the priority queue and the `cost_so_far` table alongside the graph exploration clarifies why UCS is optimal) -> Library (Vanilla JS, HTML).
+        - KMP: Report info (text, pattern, LPS table, matching steps) -> Goal (illustrate efficient pattern shifting using the LPS table) -> Viz (HTML spans for text/pattern characters) -> Interaction ("Next Step" to highlight comparisons, show pointer movements, and animate the pattern "sliding" on mismatch) -> Justification (Animating the pattern shift based on the LPS value makes the core advantage of KMP over naive search immediately obvious) -> Library (Vanilla JS, HTML).
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F7F4;
+            color: #2c3e50;
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+        }
+        .nav-button:hover {
+            background-color: #E0E7FF;
+            color: #3730A3;
+        }
+        .interactive-container {
+            border: 1px solid #E5E7EB;
+            border-radius: 0.75rem;
+            background-color: #FFFFFF;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .control-button {
+            background-color: #4A90E2;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        .control-button:hover {
+            background-color: #357ABD;
+        }
+        .control-button:disabled {
+            background-color: #9CA3AF;
+            cursor: not-allowed;
+        }
+        .matrix-table th, .matrix-table td {
+            border: 1px solid #D1D5DB;
+            text-align: center;
+            padding: 0.5rem;
+            min-width: 40px;
+        }
+        .matrix-table th {
+            background-color: #F3F4F6;
+        }
+        .highlight-cost {
+            background-color: #FEF3C7;
+            font-weight: bold;
+        }
+        .highlight-path {
+            background-color: #D1FAE5;
+            font-weight: bold;
+        }
+        .pruned {
+            text-decoration: line-through;
+            opacity: 0.6;
+            color: #EF4444;
+        }
+        .kmp-char {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            line-height: 2rem;
+            text-align: center;
+            border: 1px solid #D1D5DB;
+            margin: 0 1px;
+            font-family: monospace;
+            font-size: 1.1rem;
+        }
+        .kmp-match { background-color: #A7F3D0; }
+        .kmp-mismatch { background-color: #FECACA; }
+        .kmp-compare { border-color: #4A90E2; border-width: 2px; }
+        .kmp-found { background-color: #6EE7B7; color: #065F46; }
+
+        .graph-node {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #BFDBFE;
+            color: #1E3A8A;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 2px solid #60A5FA;
+            z-index: 10;
+        }
+        .graph-node.active {
+            background-color: #FBBF24;
+            border-color: #D97706;
+        }
+        .graph-node.path {
+            background-color: #A7F3D0;
+            border-color: #059669;
+        }
+        .graph-edge {
+            position: absolute;
+            background-color: #9CA3AF;
+            height: 2px;
+            transform-origin: 0 0;
+            z-index: 5;
+        }
+        .graph-edge.path {
+            background-color: #10B981;
+            height: 3px;
+        }
+        .edge-label {
+            position: absolute;
+            background: #F8F7F4;
+            padding: 0 4px;
+            color: #4B5563;
+            font-size: 0.8rem;
+            z-index: 6;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 shadow-sm">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-xl font-bold text-indigo-800">Panduan Algoritma</h1>
+                <div class="hidden sm:flex sm:space-x-2">
+                    <a href="#tsp" class="nav-button font-medium text-gray-700 px-3 py-2 rounded-md text-sm">B&B (TSP)</a>
+                    <a href="#ucs" class="nav-button font-medium text-gray-700 px-3 py-2 rounded-md text-sm">Uniform Cost Search</a>
+                    <a href="#kmp" class="nav-button font-medium text-gray-700 px-3 py-2 rounded-md text-sm">KMP String Matching</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">Panduan Interaktif UAS Strategi Algoritma</h1>
+            <p class="mt-4 text-lg leading-8 text-gray-600">Visualisasikan cara kerja algoritma kompleks untuk pemahaman yang lebih mendalam. Gunakan tombol "Langkah Berikutnya" di setiap bagian untuk menjalankan simulasi.</p>
+        </div>
+
+        <!-- Section 1: Branch & Bound for TSP -->
+        <section id="tsp" class="mb-16 scroll-mt-20">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">1. Algoritma Branch & Bound untuk TSP</h2>
+                <p class="text-gray-600 mb-6">Branch & Bound (B&B) adalah metode optimisasi yang secara sistematis menjelajahi semua kemungkinan solusi. Untuk Travelling Salesperson Problem (TSP), B&B digunakan untuk menemukan tur terpendek dengan memangkas (pruning) cabang-cabang pencarian yang tidak menjanjikan menggunakan batas bawah (lower bound) yang dihitung dari Reduced Cost Matrix.</p>
+                
+                <div class="interactive-container">
+                    <h3 class="text-xl font-semibold mb-4 text-center">Contoh Interaktif: TSP dengan Reduced Cost Matrix</h3>
+                    <div id="tsp-controls" class="text-center mb-6">
+                        <button id="tsp-next-step" class="control-button font-bold py-2 px-4 rounded-lg">Mulai Simulasi</button>
+                        <button id="tsp-reset" class="ml-4 text-gray-600 hover:text-gray-900 font-medium py-2 px-4 rounded-lg">Reset</button>
+                    </div>
+                    <div id="tsp-explanation" class="bg-blue-50 border-l-4 border-blue-400 text-blue-700 p-4 rounded-md mb-6 min-h-[80px]">
+                        Klik "Mulai Simulasi" untuk memulai penelusuran langkah demi langkah.
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                        <div>
+                            <h4 class="font-semibold text-center mb-2">Matriks Biaya Saat Ini</h4>
+                            <div id="tsp-matrix-container" class="overflow-x-auto"></div>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-center mb-2">Pohon Ruang Status</h4>
+                            <div id="tsp-tree-container" class="bg-gray-50 p-4 rounded-lg min-h-[200px] relative overflow-x-auto">
+                                <p class="text-gray-500 text-center">Pohon akan dibangun di sini.</p>
+                            </div>
+                            <div class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <h4 class="font-semibold text-green-800">Solusi Terbaik (Upper Bound):</h4>
+                                <p id="tsp-best-solution" class="text-green-700">Belum ditemukan (∞)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Uniform Cost Search -->
+        <section id="ucs" class="mb-16 scroll-mt-20">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">2. Algoritma Uniform Cost Search (UCS)</h2>
+                <p class="text-gray-600 mb-6">Uniform Cost Search (UCS) adalah algoritma pencarian yang menemukan jalur dengan biaya terendah dari simpul awal ke simpul tujuan. UCS memperluas simpul dengan biaya kumulatif terendah terlebih dahulu, menggunakan antrian prioritas (priority queue). Algoritma ini menjamin solusi optimal jika semua biaya tepi non-negatif.</p>
+
+                <div class="interactive-container">
+                    <h3 class="text-xl font-semibold mb-4 text-center">Contoh Interaktif: Pencarian Rute A ke L</h3>
+                    <div id="ucs-controls" class="text-center mb-6">
+                        <button id="ucs-next-step" class="control-button font-bold py-2 px-4 rounded-lg">Mulai Simulasi</button>
+                        <button id="ucs-reset" class="ml-4 text-gray-600 hover:text-gray-900 font-medium py-2 px-4 rounded-lg">Reset</button>
+                    </div>
+                    <div id="ucs-explanation" class="bg-blue-50 border-l-4 border-blue-400 text-blue-700 p-4 rounded-md mb-6 min-h-[80px]">
+                        Klik "Mulai Simulasi" untuk mencari rute terpendek dari A ke L.
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2">
+                            <h4 class="font-semibold text-center mb-2">Graf Peta</h4>
+                            <div id="ucs-graph-container" class="bg-gray-50 p-4 rounded-lg h-[450px] relative"></div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="font-semibold mb-2">Antrian Prioritas (Q)</h4>
+                                <div id="ucs-queue" class="bg-gray-100 p-3 rounded-md min-h-[100px] text-sm"></div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold mb-2">Biaya Sejauh Ini (cost_so_far)</h4>
+                                <div id="ucs-costs" class="bg-gray-100 p-3 rounded-md min-h-[100px] text-sm"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: KMP String Matching -->
+        <section id="kmp" class="mb-16 scroll-mt-20">
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">3. Algoritma KMP String Matching</h2>
+                <p class="text-gray-600 mb-6">Algoritma Knuth-Morris-Pratt (KMP) adalah metode pencocokan string yang sangat efisien. KMP menghindari perbandingan yang tidak perlu dengan menggunakan informasi dari pola itu sendiri. Informasi ini, yang disimpan dalam tabel LPS (Longest Proper Prefix which is also Suffix), memungkinkan algoritma untuk menggeser pola secara cerdas saat terjadi ketidakcocokan.</p>
+
+                <div class="interactive-container">
+                    <h3 class="text-xl font-semibold mb-4 text-center">Contoh Interaktif: Pencocokan Pola KMP</h3>
+                    <div id="kmp-controls" class="text-center mb-6">
+                        <button id="kmp-next-step" class="control-button font-bold py-2 px-4 rounded-lg">Mulai Simulasi</button>
+                        <button id="kmp-reset" class="ml-4 text-gray-600 hover:text-gray-900 font-medium py-2 px-4 rounded-lg">Reset</button>
+                    </div>
+                     <div id="kmp-explanation" class="bg-blue-50 border-l-4 border-blue-400 text-blue-700 p-4 rounded-md mb-6 min-h-[80px]">
+                        Klik "Mulai Simulasi" untuk mencari pola dalam teks.
+                    </div>
+                    <div class="overflow-x-auto p-4">
+                        <div>
+                            <h4 class="font-semibold mb-1">Teks (T)</h4>
+                            <div id="kmp-text" class="flex mb-2"></div>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold mb-1">Pola (P)</h4>
+                            <div id="kmp-pattern-container" class="relative h-10">
+                                <div id="kmp-pattern" class="flex absolute"></div>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <h4 class="font-semibold mb-1">Tabel LPS untuk Pola</h4>
+                            <div id="kmp-lps-table" class="flex"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    // TSP Interactive Logic
+    const tspState = {
+        initialMatrix: [
+            [Infinity, 10, 8, 9],
+            [5, Infinity, 6, 7],
+            [4, 12, Infinity, 6],
+            [8, 9, 10, Infinity]
+        ],
+        steps: [],
+        currentStep: 0,
+    };
+
+    function generateTspSteps() {
+        tspState.steps = [];
+        const initialMatrix = JSON.parse(JSON.stringify(tspState.initialMatrix));
+
+        // Step 0: Initial State
+        tspState.steps.push({
+            explanation: "Matriks biaya awal. Kita akan mulai dengan mereduksi baris dan kolom untuk mendapatkan Lower Bound (LB) awal.",
+            matrix: JSON.parse(JSON.stringify(initialMatrix)),
+            tree: [{ id: 0, label: "Akar", parent: null, cost: 0 }],
+            bestSolution: Infinity,
+            bestPath: "Belum ditemukan (∞)"
+        });
+
+        // Step 1: Row Reduction
+        let matrix1 = JSON.parse(JSON.stringify(initialMatrix));
+        let rowReductionCost = 0;
+        for (let i = 0; i < 4; i++) {
+            let min = Math.min(...matrix1[i]);
+            if (min !== Infinity) {
+                rowReductionCost += min;
+                for (let j = 0; j < 4; j++) {
+                    if (matrix1[i][j] !== Infinity) matrix1[i][j] -= min;
+                }
+            }
+        }
+        tspState.steps.push({
+            explanation: `Reduksi Baris: Setiap baris dikurangi nilai minimumnya. Total biaya reduksi baris = ${rowReductionCost}.`,
+            matrix: JSON.parse(JSON.stringify(matrix1)),
+            tree: [{ id: 0, label: "Akar", parent: null, cost: 0 }],
+            bestSolution: Infinity,
+            bestPath: "Belum ditemukan (∞)"
+        });
+
+        // Step 2: Column Reduction
+        let matrix2 = JSON.parse(JSON.stringify(matrix1));
+        let colReductionCost = 0;
+        for (let j = 0; j < 4; j++) {
+            let col = [];
+            for (let i = 0; i < 4; i++) col.push(matrix2[i][j]);
+            let min = Math.min(...col);
+            if (min !== Infinity && min > 0) {
+                colReductionCost += min;
+                for (let i = 0; i < 4; i++) {
+                    if (matrix2[i][j] !== Infinity) matrix2[i][j] -= min;
+                }
+            }
+        }
+        const initialLB = rowReductionCost + colReductionCost;
+        tspState.steps.push({
+            explanation: `Reduksi Kolom: Setiap kolom dikurangi nilai minimumnya. Total biaya reduksi kolom = ${colReductionCost}. Lower Bound (LB) awal = ${rowReductionCost} + ${colReductionCost} = ${initialLB}.`,
+            matrix: JSON.parse(JSON.stringify(matrix2)),
+            tree: [{ id: 0, label: "Akar", parent: null, cost: initialLB }],
+            bestSolution: Infinity,
+            bestPath: "Belum ditemukan (∞)"
+        });
+        
+        // This is a simplified, linear walkthrough of the example provided.
+        // A full B&B implementation would be much more complex.
+        const C2 = matrix2;
+        
+        // Step 3: Expand 1->4
+        let matrix3 = JSON.parse(JSON.stringify(C2));
+        let cost1_4 = C2[0][3];
+        let lb_1_4_base = initialLB + cost1_4;
+        for(let k=0; k<4; k++) { matrix3[0][k] = Infinity; matrix3[k][3] = Infinity; }
+        matrix3[3][0] = Infinity;
+        let red_1_4 = 1; // From example
+        let lb_1_4 = lb_1_4_base + red_1_4;
+        tspState.steps.push({
+            explanation: `Ekspansi dari 1: Pilih jalur dengan LB terkecil. Kita coba 1->4 (biaya 0 di matriks reduksi). LB baru = ${initialLB} + 0 + 1 (reduksi baru) = ${lb_1_4}.`,
+            matrix: JSON.parse(JSON.stringify(matrix3)),
+            tree: [
+                { id: 0, label: "Akar", parent: null, cost: initialLB },
+                { id: 1, label: "1->2", parent: 0, cost: 31 },
+                { id: 2, label: "1->3", parent: 0, cost: 29 },
+                { id: 3, label: "1->4", parent: 0, cost: lb_1_4, active: true },
+            ],
+            bestSolution: Infinity,
+            bestPath: "Belum ditemukan (∞)"
+        });
+
+        // Step 4: Expand 1->4->2
+        let matrix4 = JSON.parse(JSON.stringify(matrix3));
+        let cost4_2 = matrix3[3][1];
+        let lb_1_4_2_base = lb_1_4 + cost4_2;
+        for(let k=0; k<4; k++) { matrix4[3][k] = Infinity; matrix4[k][1] = Infinity; }
+        matrix4[1][0] = Infinity;
+        let red_1_4_2 = 2; // From example
+        let lb_1_4_2 = lb_1_4_2_base + red_1_4_2;
+        tspState.steps.push({
+            explanation: `Ekspansi dari simpul (1->4): Pilih jalur 4->2. LB baru = ${lb_1_4} + 0 + 2 (reduksi baru) = ${lb_1_4_2}.`,
+            matrix: JSON.parse(JSON.stringify(matrix4)),
+            tree: [
+                { id: 0, label: "Akar", parent: null, cost: initialLB },
+                { id: 1, label: "1->2", parent: 0, cost: 31 },
+                { id: 2, label: "1->3", parent: 0, cost: 29 },
+                { id: 3, label: "1->4", parent: 0, cost: lb_1_4 },
+                { id: 4, label: "1->4->2", parent: 3, cost: lb_1_4_2, active: true },
+                { id: 5, label: "1->4->3", parent: 3, cost: 37 },
+            ],
+            bestSolution: Infinity,
+            bestPath: "Belum ditemukan (∞)"
+        });
+
+        // Step 5: Find solution 1->4->2->3->1
+        const solutionCost = 28;
+        tspState.steps.push({
+            explanation: `Ekspansi dari (1->4->2): Jalur yang tersisa adalah 2->3 dan kembali 3->1. Ini adalah solusi lengkap. Hitung biaya asli: 9 (1->4) + 9 (4->2) + 6 (2->3) + 4 (3->1) = ${solutionCost}. Ini menjadi Upper Bound baru.`,
+            matrix: "Solusi ditemukan",
+            tree: [
+                { id: 0, label: "Akar", parent: null, cost: initialLB },
+                { id: 1, label: "1->2", parent: 0, cost: 31 },
+                { id: 2, label: "1->3", parent: 0, cost: 29 },
+                { id: 3, label: "1->4", parent: 0, cost: lb_1_4 },
+                { id: 4, label: "1->4->2", parent: 3, cost: lb_1_4_2 },
+                { id: 5, label: "1->4->3", parent: 3, cost: 37 },
+                { id: 6, label: "1->4->2->3->1", parent: 4, cost: solutionCost, solution: true },
+            ],
+            bestSolution: solutionCost,
+            bestPath: "1 -> 4 -> 2 -> 3 -> 1"
+        });
+
+        // Step 6: Pruning
+        tspState.steps.push({
+            explanation: `Pruning: Semua simpul hidup yang tersisa (1->2, 1->3, 1->4->3) memiliki LB >= ${solutionCost}. Mereka tidak mungkin menghasilkan solusi yang lebih baik, jadi mereka dipangkas.`,
+            matrix: "Pencarian Selesai",
+            tree: [
+                { id: 0, label: "Akar", parent: null, cost: initialLB },
+                { id: 1, label: "1->2 (LB: 31)", parent: 0, cost: 31, pruned: true },
+                { id: 2, label: "1->3 (LB: 29)", parent: 0, cost: 29, pruned: true },
+                { id: 3, label: "1->4", parent: 0, cost: lb_1_4 },
+                { id: 4, label: "1->4->2", parent: 3, cost: lb_1_4_2 },
+                { id: 5, label: "1->4->3 (LB: 37)", parent: 3, cost: 37, pruned: true },
+                { id: 6, label: "1->4->2->3->1", parent: 4, cost: solutionCost, solution: true },
+            ],
+            bestSolution: solutionCost,
+            bestPath: "1 -> 4 -> 2 -> 3 -> 1"
+        });
+        
+        tspState.steps.push({
+            explanation: `Pencarian selesai. Solusi optimal ditemukan: 1 -> 4 -> 2 -> 3 -> 1 dengan total biaya 28.`,
+            matrix: "Pencarian Selesai",
+            tree: [
+                { id: 0, label: "Akar", parent: null, cost: initialLB },
+                { id: 1, label: "1->2 (LB: 31)", parent: 0, cost: 31, pruned: true },
+                { id: 2, label: "1->3 (LB: 29)", parent: 0, cost: 29, pruned: true },
+                { id: 3, label: "1->4", parent: 0, cost: lb_1_4 },
+                { id: 4, label: "1->4->2", parent: 3, cost: lb_1_4_2 },
+                { id: 5, label: "1->4->3 (LB: 37)", parent: 3, cost: 37, pruned: true },
+                { id: 6, label: "1->4->2->3->1", parent: 4, cost: solutionCost, solution: true },
+            ],
+            bestSolution: solutionCost,
+            bestPath: "1 -> 4 -> 2 -> 3 -> 1"
+        });
+    }
+
+    function renderTspStep(stepIndex) {
+        const step = tspState.steps[stepIndex];
+        document.getElementById('tsp-explanation').innerHTML = step.explanation;
+        document.getElementById('tsp-best-solution').innerHTML = `${step.bestPath} (Biaya: ${step.bestSolution})`;
+
+        const matrixContainer = document.getElementById('tsp-matrix-container');
+        if (typeof step.matrix === 'string') {
+            matrixContainer.innerHTML = `<div class="text-center p-8 bg-gray-100 rounded-lg">${step.matrix}</div>`;
+        } else {
+            let tableHtml = '<table class="w-full matrix-table"><thead><tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead><tbody>';
+            for (let i = 0; i < 4; i++) {
+                tableHtml += `<tr><th>${i+1}</th>`;
+                for (let j = 0; j < 4; j++) {
+                    tableHtml += `<td>${step.matrix[i][j] === Infinity ? '∞' : step.matrix[i][j]}</td>`;
+                }
+                tableHtml += '</tr>';
+            }
+            tableHtml += '</tbody></table>';
+            matrixContainer.innerHTML = tableHtml;
+        }
+
+        const treeContainer = document.getElementById('tsp-tree-container');
+        treeContainer.innerHTML = '';
+        const positions = {};
+        const levels = {};
+        step.tree.forEach(node => {
+            // Determine the level of the current node
+            const parentNode = step.tree.find(p => p.id === node.parent);
+            const level = node.parent === null ? 0 : (parentNode ? parentNode.level + 1 : 1); 
+            node.level = level; // Store level on the node for subsequent children
+
+            // Ensure the level object exists and has a nodes array
+            if (!levels[level]) {
+                levels[level] = { count: 0, nodes: [] };
+            }
+            levels[level].count++;
+            levels[level].nodes.push(node);
+        });
+
+        Object.values(levels).forEach((levelData, levelIndex) => {
+             levelData.nodes.forEach((node, nodeIndex) => {
+                const y = 50 + levelIndex * 80;
+                const x = (treeContainer.clientWidth / (levelData.count + 1)) * (nodeIndex + 1);
+                positions[node.id] = {x, y};
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'absolute text-center text-xs p-1 rounded-md border';
+                nodeEl.style.left = `${x - 25}px`;
+                nodeEl.style.top = `${y - 15}px`;
+                nodeEl.style.width = '70px';
+                
+                let nodeClass = 'bg-gray-200 border-gray-400';
+                if(node.active) nodeClass = 'bg-yellow-200 border-yellow-500 ring-2 ring-yellow-400';
+                if(node.solution) nodeClass = 'bg-green-200 border-green-500 ring-2 ring-green-400';
+                if(node.pruned) nodeClass = 'bg-red-200 border-red-400 opacity-60';
+                
+                nodeEl.className += ` ${nodeClass}`;
+                
+                nodeEl.innerHTML = `<div class="font-bold">${node.label}</div><div class="${node.pruned ? 'line-through' : ''}">LB: ${node.cost}</div>`;
+                treeContainer.appendChild(nodeEl);
+
+                if (node.parent !== null && positions[node.parent]) {
+                    const parentPos = positions[node.parent];
+                    const line = document.createElement('div');
+                    line.className = 'absolute h-px bg-gray-400';
+                    const angle = Math.atan2(y - parentPos.y, x - parentPos.x) * 180 / Math.PI;
+                    const length = Math.sqrt(Math.pow(x - parentPos.x, 2) + Math.pow(y - parentPos.y, 2));
+                    line.style.width = `${length}px`;
+                    line.style.left = `${parentPos.x}px`;
+                    line.style.top = `${parentPos.y}px`;
+                    line.style.transform = `rotate(${angle}deg)`;
+                    line.style.transformOrigin = '0 0';
+                    treeContainer.insertBefore(line, treeContainer.firstChild);
+                }
+            });
+        });
+    }
+
+    const tspNextBtn = document.getElementById('tsp-next-step');
+    tspNextBtn.addEventListener('click', () => {
+        if (tspState.currentStep === 0) {
+            tspNextBtn.textContent = 'Langkah Berikutnya';
+        }
+        if (tspState.currentStep < tspState.steps.length) {
+            renderTspStep(tspState.currentStep);
+            tspState.currentStep++;
+        }
+        if (tspState.currentStep >= tspState.steps.length) {
+            tspNextBtn.disabled = true;
+            tspNextBtn.textContent = 'Selesai';
+        }
+    });
+
+    document.getElementById('tsp-reset').addEventListener('click', () => {
+        tspState.currentStep = 0;
+        document.getElementById('tsp-explanation').innerHTML = 'Klik "Mulai Simulasi" untuk memulai penelusuran langkah demi langkah.';
+        document.getElementById('tsp-matrix-container').innerHTML = '';
+        document.getElementById('tsp-tree-container').innerHTML = '<p class="text-gray-500 text-center">Pohon akan dibangun di sini.</p>';
+        document.getElementById('tsp-best-solution').innerHTML = 'Belum ditemukan (∞)';
+        tspNextBtn.disabled = false;
+        tspNextBtn.textContent = 'Mulai Simulasi';
+    });
+
+    // UCS Interactive Logic
+    const ucsState = {
+        graph: {
+            nodes: {
+                A: { x: 50, y: 150 }, S: { x: 150, y: 50 }, R: { x: 250, y: 50 },
+                P: { x: 250, y: 150 }, D: { x: 150, y: 250 }, M: { x: 250, y: 250 },
+                B: { x: 350, y: 150 }, T: { x: 350, y: 250 }, L: { x: 450, y: 250 },
+                C: { x: 450, y: 150 }
+            },
+            edges: [
+                { from: 'A', to: 'S', cost: 100 }, { from: 'A', to: 'R', cost: 140 },
+                { from: 'A', to: 'P', cost: 120 }, { from: 'S', to: 'R', cost: 80 },
+                { from: 'S', to: 'D', cost: 75 }, { from: 'R', to: 'P', cost: 99 },
+                { from: 'R', to: 'M', cost: 146 }, { from: 'P', to: 'B', cost: 118 },
+                { from: 'P', to: 'T', cost: 111 }, { from: 'D', to: 'M', cost: 138 },
+                { from: 'M', to: 'T', cost: 70 }, { from: 'T', to: 'L', cost: 70 },
+                { from: 'T', to: 'C', cost: 101 }, { from: 'L', to: 'C', cost: 85 },
+                { from: 'C', to: 'B', cost: 120 }, { from: 'B', to: 'L', cost: 90 }
+            ]
+        },
+        steps: [],
+        currentStep: 0,
+    };
+
+    function generateUcsSteps() {
+        ucsState.steps = [];
+        const { nodes, edges } = ucsState.graph;
+        const adj = {};
+        Object.keys(nodes).forEach(n => adj[n] = []);
+        edges.forEach(e => {
+            adj[e.from].push({ node: e.to, cost: e.cost });
+            adj[e.to].push({ node: e.from, cost: e.cost });
+        });
+
+        let q = [{ cost: 0, node: 'A' }];
+        let cost_so_far = { 'A': 0 };
+        let came_from = { 'A': null };
+        let path = [];
+
+        function recordStep(explanation, currentNode) {
+            ucsState.steps.push({
+                explanation,
+                q: JSON.parse(JSON.stringify(q)),
+                costs: JSON.parse(JSON.stringify(cost_so_far)),
+                currentNode,
+                path: JSON.parse(JSON.stringify(path))
+            });
+        }
+
+        recordStep("Inisialisasi: Mulai dari simpul A dengan biaya 0. Masukkan (0, 'A') ke antrian prioritas.", 'A');
+
+        while (q.length > 0) {
+            q.sort((a, b) => a.cost - b.cost);
+            const { cost: currentCost, node: currentNode } = q.shift();
+
+            if (currentNode === 'L') {
+                let curr = 'L';
+                while(curr) {
+                    path.unshift(curr);
+                    curr = came_from[curr];
+                }
+                recordStep(`Tujuan L ditemukan dengan biaya ${currentCost}! Rekonstruksi jalur: ${path.join(' -> ')}.`, 'L');
+                break;
+            }
+            
+            recordStep(`Ekspansi ${currentNode} (biaya ${currentCost}). Periksa tetangganya.`, currentNode);
+
+            for (const neighbor of adj[currentNode]) {
+                const newCost = currentCost + neighbor.cost;
+                if (!(neighbor.node in cost_so_far) || newCost < cost_so_far[neighbor.node]) {
+                    const oldCost = cost_so_far[neighbor.node];
+                    cost_so_far[neighbor.node] = newCost;
+                    came_from[neighbor.node] = currentNode;
+                    q.push({ cost: newCost, node: neighbor.node });
+                    let explanation = `Menemukan jalur ke ${neighbor.node} dengan biaya ${newCost}. `;
+                    if(oldCost) {
+                        explanation += `Ini lebih baik dari biaya sebelumnya (${oldCost}), jadi perbarui.`;
+                    } else {
+                        explanation += `Ini adalah jalur pertama ke ${neighbor.node}.`;
+                    }
+                    recordStep(explanation, currentNode);
+                } else {
+                    recordStep(`Jalur ke ${neighbor.node} melalui ${currentNode} (biaya ${newCost}) tidak lebih baik dari yang sudah ada (${cost_so_far[neighbor.node]}). Abaikan.`, currentNode);
+                }
+            }
+        }
+    }
+
+    function renderUcsGraph(step) {
+        const container = document.getElementById('ucs-graph-container');
+        container.innerHTML = '';
+
+        ucsState.graph.edges.forEach(edge => {
+            const node1 = ucsState.graph.nodes[edge.from];
+            const node2 = ucsState.graph.nodes[edge.to];
+            const line = document.createElement('div');
+            const isPathEdge = step.path.includes(edge.from) && step.path.includes(edge.to) && Math.abs(step.path.indexOf(edge.from) - step.path.indexOf(edge.to)) === 1;
+            line.className = `graph-edge ${isPathEdge ? 'path' : ''}`;
+            const length = Math.sqrt(Math.pow(node2.x - node1.x, 2) + Math.pow(node2.y - node1.y, 2));
+            const angle = Math.atan2(node2.y - node1.y, node2.x - node1.x) * 180 / Math.PI;
+            line.style.width = `${length}px`;
+            line.style.left = `${node1.x}px`;
+            line.style.top = `${node1.y}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            container.appendChild(line);
+
+            const label = document.createElement('div');
+            label.className = 'edge-label';
+            label.textContent = edge.cost;
+            label.style.left = `${node1.x + (node2.x - node1.x) / 2 - 10}px`;
+            label.style.top = `${node1.y + (node2.y - node1.y) / 2 - 10}px`;
+            container.appendChild(label);
+        });
+
+        Object.entries(ucsState.graph.nodes).forEach(([name, pos]) => {
+            const nodeEl = document.createElement('div');
+            let classes = 'graph-node';
+            if (name === step.currentNode) classes += ' active';
+            if (step.path.includes(name)) classes += ' path';
+            nodeEl.className = classes;
+            nodeEl.style.left = `${pos.x - 20}px`;
+            nodeEl.style.top = `${pos.y - 20}px`;
+            nodeEl.textContent = name;
+            container.appendChild(nodeEl);
+        });
+    }
+
+    function renderUcsStep(stepIndex) {
+        const step = ucsState.steps[stepIndex];
+        document.getElementById('ucs-explanation').innerHTML = step.explanation;
+        
+        const queueEl = document.getElementById('ucs-queue');
+        queueEl.innerHTML = step.q.map(item => `(${item.cost}, '${item.node}')`).join('<br>');
+
+        const costsEl = document.getElementById('ucs-costs');
+        costsEl.innerHTML = Object.entries(step.costs).map(([node, cost]) => `'${node}': ${cost}`).join('<br>');
+        
+        renderUcsGraph(step);
+    }
+    
+    const ucsNextBtn = document.getElementById('ucs-next-step');
+    ucsNextBtn.addEventListener('click', () => {
+        if (ucsState.currentStep === 0) {
+            ucsNextBtn.textContent = 'Langkah Berikutnya';
+        }
+        if (ucsState.currentStep < ucsState.steps.length) {
+            renderUcsStep(ucsState.currentStep);
+            ucsState.currentStep++;
+        }
+        if (ucsState.currentStep >= ucsState.steps.length) {
+            ucsNextBtn.disabled = true;
+            ucsNextBtn.textContent = 'Selesai';
+        }
+    });
+
+    document.getElementById('ucs-reset').addEventListener('click', () => {
+        ucsState.currentStep = 0;
+        document.getElementById('ucs-explanation').innerHTML = 'Klik "Mulai Simulasi" untuk mencari rute terpendek dari A ke L.';
+        document.getElementById('ucs-queue').innerHTML = '';
+        document.getElementById('ucs-costs').innerHTML = '';
+        renderUcsGraph({ path: [], currentNode: null });
+        ucsNextBtn.disabled = false;
+        ucsNextBtn.textContent = 'Mulai Simulasi';
+    });
+
+
+    // KMP Interactive Logic
+    const kmpState = {
+        text: "ABABDABACDABABCABAB",
+        pattern: "ABABCABAB",
+        lps: [],
+        steps: [],
+        currentStep: 0,
+    };
+
+    function computeLPS(pattern) {
+        const m = pattern.length;
+        const lps = Array(m).fill(0);
+        let length = 0;
+        let i = 1;
+        while (i < m) {
+            if (pattern[i] === pattern[length]) {
+                length++;
+                lps[i] = length;
+                i++;
+            } else {
+                if (length !== 0) {
+                    length = lps[length - 1];
+                } else {
+                    lps[i] = 0;
+                    i++;
+                }
+            }
+        }
+        return lps;
+    }
+
+    function generateKmpSteps() {
+        kmpState.lps = computeLPS(kmpState.pattern);
+        kmpState.steps = [];
+        const T = kmpState.text;
+        const P = kmpState.pattern;
+        const lps = kmpState.lps;
+        const n = T.length;
+        const m = P.length;
+        let i = 0; // index for text
+        let j = 0; // index for pattern
+
+        kmpState.steps.push({ i, j, action: 'start', explanation: 'Mulai pencocokan. i = 0 (teks), j = 0 (pola).' });
+
+        while (i < n) {
+            if (P[j] === T[i]) {
+                kmpState.steps.push({ i, j, action: 'match', explanation: `Cocok: T[${i}] ('${T[i]}') == P[${j}] ('${P[j]}'). Lanjutkan i dan j.` });
+                i++;
+                j++;
+            }
+            if (j === m) {
+                kmpState.steps.push({ i, j, action: 'found', foundIndex: i - j, explanation: `Pola ditemukan pada indeks ${i - j}. Geser pola menggunakan LPS[j-1] = ${lps[j-1]} untuk mencari lagi.` });
+                j = lps[j - 1];
+            } else if (i < n && P[j] !== T[i]) {
+                if (j !== 0) {
+                    kmpState.steps.push({ i, j, action: 'mismatch_shift', explanation: `Tidak Cocok: T[${i}] ('${T[i]}') != P[${j}] ('${P[j]}'). Geser pola, j baru = LPS[${j-1}] = ${lps[j-1]}.` });
+                    j = lps[j - 1];
+                } else {
+                    kmpState.steps.push({ i, j, action: 'mismatch_advance', explanation: `Tidak Cocok: T[${i}] ('${T[i]}') != P[${j}] ('${P[j]}'). Pola tidak bisa digeser lagi (j=0), geser teks (i++).` });
+                    i++;
+                }
+            }
+        }
+        kmpState.steps.push({ i, j, action: 'end', explanation: 'Pencarian selesai.' });
+    }
+
+    function renderKmpStep(stepIndex) {
+        const step = kmpState.steps[stepIndex];
+        const textEl = document.getElementById('kmp-text');
+        const patternEl = document.getElementById('kmp-pattern');
+        
+        document.getElementById('kmp-explanation').innerHTML = step.explanation;
+
+        // Clear previous highlights
+        Array.from(textEl.children).forEach(c => c.classList.remove('kmp-compare', 'kmp-mismatch', 'kmp-match'));
+        Array.from(patternEl.children).forEach(c => c.classList.remove('kmp-compare', 'kmp-mismatch', 'kmp-match'));
+
+        // Set pattern position
+        const patternContainer = document.getElementById('kmp-pattern-container');
+        const offset = step.i - step.j;
+        patternEl.style.left = `${offset * 2.125}rem`; // 2rem width + 0.125rem margin
+
+        if(step.action !== 'end' && step.action !== 'start') {
+            const textChar = textEl.children[step.i];
+            const patternChar = patternEl.children[step.j];
+
+            if(textChar) textChar.classList.add('kmp-compare');
+            if(patternChar) patternChar.classList.add('kmp-compare');
+
+            if(step.action.startsWith('mismatch')) {
+                 if(textChar) textChar.classList.add('kmp-mismatch');
+                 if(patternChar) patternChar.classList.add('kmp-mismatch');
+            }
+            if(step.action === 'match') {
+                 if(textChar) textChar.classList.add('kmp-match');
+                 if(patternChar) patternChar.classList.add('kmp-match');
+            }
+        }
+
+        if(step.action === 'found') {
+            for(let k=0; k < kmpState.pattern.length; k++) {
+                textEl.children[step.foundIndex + k].classList.add('kmp-found');
+            }
+        }
+    }
+
+    function initKMP() {
+        const textEl = document.getElementById('kmp-text');
+        textEl.innerHTML = kmpState.text.split('').map(c => `<span class="kmp-char">${c}</span>`).join('');
+        
+        const patternEl = document.getElementById('kmp-pattern');
+        patternEl.innerHTML = kmpState.pattern.split('').map(c => `<span class="kmp-char">${c}</span>`).join('');
+
+        const lpsTableEl = document.getElementById('kmp-lps-table');
+        let lpsHtml = '<table class="matrix-table"><tbody><tr><th>Indeks</th>';
+        kmpState.lps.forEach((_, i) => lpsHtml += `<td>${i}</td>`);
+        lpsHtml += '</tr><tr><th>LPS</th>';
+        kmpState.lps.forEach(v => lpsHtml += `<td>${v}</td>`);
+        lpsHtml += '</tr></tbody></table>';
+        lpsTableEl.innerHTML = lpsHtml;
+    }
+
+    const kmpNextBtn = document.getElementById('kmp-next-step');
+    kmpNextBtn.addEventListener('click', () => {
+        if (kmpState.currentStep === 0) {
+            kmpNextBtn.textContent = 'Langkah Berikutnya';
+        }
+        if (kmpState.currentStep < kmpState.steps.length) {
+            renderKmpStep(kmpState.currentStep);
+            kmpState.currentStep++;
+        }
+        if (kmpState.currentStep >= kmpState.steps.length) {
+            kmpNextBtn.disabled = true;
+            kmpNextBtn.textContent = 'Selesai';
+        }
+    });
+    
+    document.getElementById('kmp-reset').addEventListener('click', () => {
+        kmpState.currentStep = 0;
+        document.getElementById('kmp-explanation').innerHTML = 'Klik "Mulai Simulasi" untuk mencari pola dalam teks.';
+        kmpNextBtn.disabled = false;
+        kmpNextBtn.textContent = 'Mulai Simulasi';
+        // Clear highlights
+        Array.from(document.getElementById('kmp-text').children).forEach(c => c.className = 'kmp-char');
+        renderKmpStep(0);
+    });
+
+    // Initial setup calls
+    generateTspSteps();
+    generateUcsSteps();
+    renderUcsGraph({ path: [], currentNode: null });
+    generateKmpSteps();
+    initKMP();
+});
+</script>
+</body>
+</html>
